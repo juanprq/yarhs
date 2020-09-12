@@ -15,9 +15,11 @@ while session = server.accept
   session.puts 'HTTP/1.1 200'
   session.puts 'Content-Type: text/html'
   session.puts
-  session.puts "Hello world! The time is #{Time.now}"
+  session.print "Hello world! The time is #{Time.now}, request number: #{request_number}"
 
   session.close
+
+  sleep(1)
 
   request_number += 1
 end
