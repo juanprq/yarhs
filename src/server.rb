@@ -4,34 +4,40 @@ require 'etc'
 PORT = 8080
 CPU_COUNT = Etc.nprocessors
 
-server = TCPServer.new(PORT)
-
 request_number = 1
 
-puts "server listening on port: #{PORT}, cpu's: #{CPU_COUNT}"
+pipe = Ractor.new do
+  loop do
+    Ractor.yield(Ractor.recv, move: true)
+  end
+end
 
 workers = CPU_COUNT.times.map do |actor_id|
-  Ractor.new name: "worker-#{actor_id}" do
+  Ractor.new(pipe, name: "worker-#{actor_id}")  do |pipe|
     loop do
-      session = Ractor.recv
+      session = pipe.take
+      puts "por aqui!"
 
-      request = session.gets
+      data = session.recv(1024)
+      p data
       puts "incoming request received by worker: #{name}"
 
       session.puts 'HTTP/1.1 200'
       session.puts 'Content-Type: text/html'
       session.puts
-      session.print "Hello world! The time is #{Time.now}, worker_id: #{name}"
+      session.puts "Hello world! The time is #{Time.now}, worker_id: #{name}"
 
       session.close
     end
   end
 end
 
+server = TCPServer.new(PORT)
+puts "server listening on port: #{PORT}, cpu's: #{CPU_COUNT}"
+
 loop do
   conn, _ = server.accept
-  worker = workers.sample
 
-  worker.send(conn, move: true)
+  pipe.send(conn, move: true)
   request_number += 1
 end
