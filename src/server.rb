@@ -1,25 +1,37 @@
 require 'socket'
+require 'etc'
 
-port = 8080
-server = TCPServer.new(port)
+PORT = 8080
+CPU_COUNT = Etc.nprocessors
+
+server = TCPServer.new(PORT)
 
 request_number = 1
 
-puts "server listening on port: #{port}"
-while session = server.accept
-  request = session.gets
+puts "server listening on port: #{PORT}, cpu's: #{CPU_COUNT}"
 
-  puts "incoming request: #{request_number}"
-  puts request
+workers = CPU_COUNT.times.map do |actor_id|
+  Ractor.new name: "worker-#{actor_id}" do
+    loop do
+      session = Ractor.recv
 
-  session.puts 'HTTP/1.1 200'
-  session.puts 'Content-Type: text/html'
-  session.puts
-  session.print "Hello world! The time is #{Time.now}, request number: #{request_number}"
+      request = session.gets
+      puts "incoming request received by worker: #{name}"
 
-  session.close
+      session.puts 'HTTP/1.1 200'
+      session.puts 'Content-Type: text/html'
+      session.puts
+      session.print "Hello world! The time is #{Time.now}, worker_id: #{name}"
 
-  sleep(1)
+      session.close
+    end
+  end
+end
 
+loop do
+  conn, _ = server.accept
+  worker = workers.sample
+
+  worker.send(conn, move: true)
   request_number += 1
 end
